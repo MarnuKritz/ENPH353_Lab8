@@ -9,6 +9,7 @@ from gym_gazebo.core.gazebo_env import GazeboEnv
 from rclpy.node import Node as RosNode
 from sensor_msgs.msg import Image as RosImage
 from geometry_msgs.msg import Twist as RosTwist
+import os
 
 NUM_OBS_STATES = 3
 NUM_ACTIONS = 3
@@ -138,19 +139,22 @@ class LineFollowerEnv(GazeboEnv):
         @param action: an integer where 0 is left, 1 is forward and 2 is right 
         @retval vel_cmd: Twist message equivalent of the action
         '''
-        vel_cmd = RosTwist()
+        vel_cmd = RosTwist() # Initialize ROS command
 
+        # When paction is set to "turn left", drive slightly forward and turn left
         if(action == 0):
-            vel_cmd.linear.x = 0.12
-            vel_cmd.angular.z = 0.4
+            vel_cmd.linear.x = 0.4
+            vel_cmd.angular.z = 2.5
 
+        # When action is set to "go straight", drive forward
         elif(action == 1):
-            vel_cmd.linear.x = 0.3
+            vel_cmd.linear.x = 2.0
             vel_cmd.angular.z = 0.0
 
+        # When action is set to "turn right", drive slightly forward and turn right
         elif(action == 2):
-            vel_cmd.linear.x = 0.12
-            vel_cmd.angular.z = -0.4
+            vel_cmd.linear.x = 0.4
+            vel_cmd.angular.z = -2.5
         
         return vel_cmd
 
@@ -163,21 +167,19 @@ class LineFollowerEnv(GazeboEnv):
         '''
         reward = 0
 
-        if(terminated): reward -= 20
+        # Greatly discourage the robot from losing the line
+        if(terminated): reward -= 100
 
-        if(state == 0):
-            if(action == 0): reward += 5
-            elif(action == 1): reward -= 2
-            elif(action == 2): reward -= 4
+        # Reward the robot for responding appropriately to needing to turn left. Lesser punishment for driving straight, as
+        # it might be a viable option, strong discouragement for turning right when needing to turn left
+        if(state == 0): reward += 5
 
-        elif(state == 1):
-            if(action == 1): reward += 5
-            else: reward -= 3
+        # Reward robot for responding appropriately to going straight. Equal punishment for unwaranted left or right turn
+        elif(state == 1): reward += 5
 
-        elif(state == 2):
-            if(action == 2): reward += 5
-            elif(action == 1): reward -= 2
-            elif(action == 0): reward -= 4
+        # Reward robot for responding appropriately to needing to turn right. Lesser punishment for driving straight, moreso
+        # for turning left when it needs to go right
+        elif(state == 2):reward += 5
 
         return reward
 
@@ -193,6 +195,8 @@ class LineFollowerEnv(GazeboEnv):
         @retval terminated: the termination condition occured - the line is no 
                     longer in the field of the camera
         '''
+
+        # Recieve frame from ROS channel
         cv_image = CvBridge().imgmsg_to_cv2(obs, desired_encoding='bgr8')
 
         # Default as line is centered
@@ -204,7 +208,7 @@ class LineFollowerEnv(GazeboEnv):
         right_border = (width*2)/3
 
         ## @brief Reduces area of interest to bottom 30% of screen.
-        startRead = int(height*0.50)
+        startRead = int(height*0.90)
         bottom = cv_image[startRead:,:]
 
         ## @brief Converts area of interest to HSV and extracts saturation channel.
@@ -212,7 +216,7 @@ class LineFollowerEnv(GazeboEnv):
         S = hsv[:,:,1]
 
         ## @brief Creates a mask to differentiate high-saturation pixels
-        mask = S > 130
+        mask = S > 120
 
         ## @brief Place xy coordinates of mask pixels and in an array.
 

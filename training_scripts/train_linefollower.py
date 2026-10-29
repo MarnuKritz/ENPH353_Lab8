@@ -4,6 +4,7 @@ import gym_gazebo
 import gymnasium as gym
 import numpy as np
 from torch.utils.tensorboard.writer import SummaryWriter
+import os
 
 def main():
     writer = SummaryWriter()
@@ -15,9 +16,14 @@ def main():
     epsilon = 0.8
     epsilon_decay = 0.99
 
-    q_table = np.zeros((observation_space.n, action_space.n))
+    if os.path.exists("q_table.csv"):
+        q_table = loadQ("q_table.csv")
+        print("Loaded existing Q-table.")
+    else:
+        q_table = np.zeros((observation_space.n, action_space.n))
+        print("Created a new Q-table.")
 
-    highest_reward = 0
+    highest_reward = float("-inf")
 
     try:
         state, _ = env.reset()
@@ -75,7 +81,6 @@ def learn(state, action, next_state, reward, q_table):
 
     else:
         q_table[state,action] = q_table[state, action] + alpha*(reward + gamma*np.max(q_table[next_state, :])- q_table[state, action])
-
 
     return q_table
 
